@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { ShoppingCart, Menu, X, MessageCircle, Trash2, Plus, Minus } from "lucide-react";
+import { ShoppingCart, Menu, X, MessageCircle, Trash2, Plus, Minus, Share2, Check } from "lucide-react";
 
 /*
   TIENDA TEXTIL - VERSIÓN 1
@@ -77,6 +77,19 @@ function buildWhatsAppUrl(product) {
     : "Hola 👋😊, estoy interesado/a en conocer los productos textiles para el hogar 🛏️🧺✨ que ofrecen. ¿Podrían enviarme más información 📩📋? ¡Gracias! 🙌";
 
   return `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+}
+
+async function shareProduct(product, onCopied) {
+  const text = `Mira este producto en Casa San Antonio: ${product.nombre} - ${formatPrice(product.precio)}`;
+  const url = window.location.href;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: product.nombre, text, url });
+    } catch (_) {}
+  } else {
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    onCopied();
+  }
 }
 
 function TopBar() {
@@ -236,10 +249,146 @@ function CategoryFilter({ selectedCategory, setSelectedCategory, sortOrder, setS
   );
 }
 
-function ProductCard({ product, onAddToCart }) {
+function ProductModal({ product, allProducts, onClose, onAddToCart }) {
+  const [qty, setQty] = useState(1);
+  const [copied, setCopied] = useState(false);
+
+  const related = allProducts
+    .filter((p) => p.categoria === product.categoria && p.id !== product.id)
+    .slice(0, 4);
+
+  function handleShare() {
+    shareProduct(product, () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  function handleAdd() {
+    for (let i = 0; i < qty; i++) onAddToCart(product);
+    onClose();
+  }
+
+  React.useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <>
+      <div onClick={onClose} className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-y-auto rounded-[2rem] bg-white shadow-2xl">
+
+          {/* Botones top-right */}
+          <div className="absolute right-4 top-4 z-10 flex gap-2">
+            <button
+              onClick={handleShare}
+              className="flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-2 text-xs font-bold text-stone-700 shadow hover:bg-stone-100"
+            >
+              {copied ? <Check size={14} className="text-green-600" /> : <Share2 size={14} />}
+              {copied ? "¡Copiado!" : "Compartir"}
+            </button>
+            <button onClick={onClose} className="rounded-full bg-white/90 p-2 text-stone-700 shadow hover:bg-stone-100">
+              <X size={20} />
+            </button>
+          </div>
+
+          {/* Foto + info */}
+          <div className="grid md:grid-cols-2">
+            <div className="relative h-72 overflow-hidden rounded-t-[2rem] bg-stone-100 md:h-auto md:rounded-l-[2rem] md:rounded-tr-none">
+              <img src={product.imagen} alt={product.nombre} className="h-full w-full object-cover" />
+              {product.destacado && (
+                <span className="absolute left-4 top-4 rounded-full bg-amber-700 px-3 py-1 text-xs font-bold text-white">Destacado</span>
+              )}
+            </div>
+
+            <div className="flex flex-col justify-between p-6">
+              <div>
+                <span className="mb-2 inline-block rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold text-stone-600">{product.categoria}</span>
+                <h2 className="text-2xl font-black leading-tight text-stone-950">{product.nombre}</h2>
+                <p className="mt-3 text-sm leading-6 text-stone-600">{product.descripcion}</p>
+                <p className="mt-4 text-3xl font-black text-amber-800">{formatPrice(product.precio)}</p>
+                <p className={`mt-1 text-sm font-semibold ${product.stock > 0 ? "text-emerald-700" : "text-red-600"}`}>
+                  {product.stock > 0 ? `${product.stock} disponibles` : "Agotado"}
+                </p>
+              </div>
+
+              {product.stock > 0 && (
+                <div className="mt-6">
+                  <p className="mb-2 text-sm font-semibold text-stone-700">Cantidad</p>
+                  <div className="mb-4 flex items-center gap-3">
+                    <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="rounded-full bg-stone-100 p-2 hover:bg-stone-200">
+                      <Minus size={16} />
+                    </button>
+                    <span className="w-8 text-center text-lg font-black">{qty}</span>
+                    <button onClick={() => setQty((q) => Math.min(product.stock, q + 1))} className="rounded-full bg-stone-100 p-2 hover:bg-stone-200">
+                      <Plus size={16} />
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleAdd}
+                    className="flex w-full items-center justify-center gap-2 rounded-2xl bg-stone-950 px-5 py-3.5 font-black text-white transition hover:bg-amber-800"
+                  >
+                    <ShoppingCart size={18} /> Agregar al carrito
+                  </button>
+                  <a
+                    href={buildWhatsAppUrl(product)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-green-600 bg-green-50 px-5 py-3.5 text-center font-black text-green-700 transition hover:bg-green-600 hover:text-white"
+                  >
+                    <MessageCircle size={18} /> Consultar por WhatsApp
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Productos relacionados */}
+          {related.length > 0 && (
+            <div className="border-t border-stone-100 p-6">
+              <p className="mb-4 text-sm font-bold uppercase tracking-wide text-stone-500">Más de {product.categoria}</p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {related.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => { onClose(); setTimeout(() => onAddToCart(p), 100); }}
+                    className="group rounded-2xl border border-stone-200 bg-white p-2 text-left transition hover:border-amber-700 hover:shadow-md"
+                  >
+                    <img src={p.imagen} alt={p.nombre} className="mb-2 h-24 w-full rounded-xl object-cover transition group-hover:scale-105" />
+                    <p className="text-xs font-bold leading-tight text-stone-900">{p.nombre}</p>
+                    <p className="mt-1 text-xs font-black text-amber-800">{formatPrice(p.precio)}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ProductCard({ product, onAddToCart, onOpenModal }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleShare(e) {
+    e.stopPropagation();
+    shareProduct(product, () => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-[1.7rem] border border-stone-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
-      <div className="relative h-64 overflow-hidden bg-stone-100">
+      <div
+        className="relative h-64 cursor-pointer overflow-hidden bg-stone-100"
+        onClick={() => onOpenModal(product)}
+      >
         <img src={product.imagen} alt={product.nombre} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
         <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-xs font-bold text-stone-800 backdrop-blur">
           {product.categoria}
@@ -249,11 +398,24 @@ function ProductCard({ product, onAddToCart }) {
             Destacado
           </span>
         )}
+        {/* Botón compartir sobre la imagen */}
+        <button
+          onClick={handleShare}
+          className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-stone-700 shadow backdrop-blur transition hover:bg-white"
+        >
+          {copied ? <Check size={13} className="text-green-600" /> : <Share2 size={13} />}
+          {copied ? "¡Copiado!" : "Compartir"}
+        </button>
       </div>
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-3">
-          <h3 className="text-lg font-black leading-tight text-stone-950">{product.nombre}</h3>
+          <h3
+            className="cursor-pointer text-lg font-black leading-tight text-stone-950 hover:text-amber-800 transition"
+            onClick={() => onOpenModal(product)}
+          >
+            {product.nombre}
+          </h3>
           <p className="mt-2 text-sm leading-6 text-stone-600">{product.descripcion}</p>
           <p className="mt-3 text-2xl font-black text-amber-800">{formatPrice(product.precio)}</p>
         </div>
@@ -286,13 +448,31 @@ function ProductCard({ product, onAddToCart }) {
   );
 }
 
-function ProductGrid({ products, onAddToCart }) {
+function ProductGrid({ products, allProducts, onAddToCart }) {
+  const [selectedProduct, setSelectedProduct] = useState(null);
+
   return (
-    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {products.map((product) => (
-        <ProductCard key={product.id} product={product} onAddToCart={onAddToCart} />
-      ))}
-    </div>
+    <>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {products.map((product) => (
+          <ProductCard
+            key={product.id}
+            product={product}
+            onAddToCart={onAddToCart}
+            onOpenModal={setSelectedProduct}
+          />
+        ))}
+      </div>
+
+      {selectedProduct && (
+        <ProductModal
+          product={selectedProduct}
+          allProducts={allProducts}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={onAddToCart}
+        />
+      )}
+    </>
   );
 }
 
@@ -743,7 +923,7 @@ export default function App() {
         {error && (
           <div className="rounded-3xl bg-red-50 p-6 text-center text-red-600">{error}</div>
         )}
-        {!loading && !error && <ProductGrid products={filteredProducts} onAddToCart={addToCart} />}
+        {!loading && !error && <ProductGrid products={filteredProducts} allProducts={productsData} onAddToCart={addToCart} />}
       </section>
 
       <Cart
